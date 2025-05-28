@@ -1,0 +1,73 @@
+services:
+  app:
+    build:
+      context: ./docker/php
+    container_name: app-${PROJECT_NAME}
+    restart: ${RESTART_POLICY}
+    volumes:
+      - ./app/:/var/www/html
+      - ./docker/php/php.ini:/usr/local/etc/php/php.ini
+    environment:
+      TZ: ${PHP_DATE_TIMEZONE}
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT}
+      PHP_POST_MAX_SIZE: ${PHP_POST_MAX_SIZE}
+      PHP_MAX_FILE_UPLOADS: ${PHP_MAX_FILE_UPLOADS}
+      PHP_UPLOAD_MAX_FILESIZE: ${PHP_UPLOAD_MAX_FILESIZE}
+      PHP_SESSION_SAVE_HANDLER: ${PHP_SESSION_SAVE_HANDLER}
+      PHP_SESSION_SAVE_PATH: ${PHP_SESSION_SAVE_PATH}
+      PHP_MAX_INPUT_VARS: ${PHP_MAX_INPUT_VARS}
+      PHP_MAX_EXECUTION_TIME: ${PHP_MAX_EXECUTION_TIME}
+      ERROR_REPORTING: ${ERROR_REPORTING}
+      PHP_DATE_TIMEZONE: ${PHP_DATE_TIMEZONE}
+      PHP_LOG_ERRORS: ${PHP_LOG_ERRORS}
+      PHP_LOG_ERRORS_MAX_LEN: ${PHP_LOG_ERRORS_MAX_LEN}
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx-${PROJECT_NAME}
+    restart: ${RESTART_POLICY}
+    depends_on:
+      app:
+        condition: service_started
+    ports:
+      - ${NGINX_LOCAL_PORT}:80
+    volumes:
+      - ./docker/nginx/logs:/var/log/nginx
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./docker/nginx/app.conf:/etc/nginx/conf.d/default.conf
+      - ./app/:/var/www/html
+    environment:
+      TZ: ${PHP_DATE_TIMEZONE}
+
+  mysql:
+    image: mysql:5.7.21
+    container_name: mysql-${PROJECT_NAME}
+    restart: ${RESTART_POLICY}
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: ${PHP_DATE_TIMEZONE}
+    volumes:
+      - ./docker/database/data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysql", "-u${MYSQL_USER}", "-p${MYSQL_PASSWORD}", "-e", "use ${MYSQL_DATABASE}; show tables;"]
+      timeout: 10s
+      retries: 40
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: pma-${PROJECT_NAME}
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_ARBITRARY: 1
+    ports:
+      -  ${PMA_PORT}:80
+    depends_on:
+      mysql:
+        condition: service_healthy
